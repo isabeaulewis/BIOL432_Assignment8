@@ -1,0 +1,130 @@
+---
+title: "Assignment 8"
+author: "Isabeau Lewis"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Figures & Code
+
+## Setup
+Loading libraries:
+```{r}
+library(dplyr)
+library(tidyverse)
+library(vegan)
+library(ape)
+library(ggtree)
+```
+
+Reading data:
+```{r}
+dat <- read.csv("./data/FloristicSurvey.csv")
+head(dat)
+```
+
+Preparing data for analysis:
+```{r}
+# Keeping only Quadrate (location) and species IDs (Claytonia_virginiana - maianthenum_racemosum)
+dat_a <- dat %>% select(Quadrate, c(Claytonia_virginiana:maianthenum_racemosum))
+
+# Making the first column (Quadrate) the row names
+dat_a <- dat_a %>% remove_rownames %>% column_to_rownames(var="Quadrate")
+```
+
+Making a separate data frame for Location (garlic mustard in/out):
+```{r}
+Location <- dat %>% select(Quadrate, Population, Location)
+```
+
+
+## Questions
+
+1. What effect (if any) does garlic mustard have on the plant community?
+```{r}
+# Making the tree
+dat_dist<-vegdist(dat_a, method="bray", binary=FALSE)
+dat_tree<-nj(dat_dist)
+ggtree(dat_tree, layout="rectangular") %<+% Location +
+  geom_tiplab(aes(colour=Location)) +
+  theme(legend.position="right") # Joining presence of garlic mustard to tree for labelling
+```
+
+> **Figure 1: A tree clustering species abundance from different quadrates (tip labels) that either contain garlic mustard (red; i) or no garlic mustard (blue; o). Data was collected from a floristic survey for species abundance in the presence or absence of garlic mustard at the Queen's University Biological Station. Species counts were recorded for each quadrate. A distance matrix was calculated to create the tree.**
+
+Making a linear model of the relationship between total garlic mustard and total other species number:
+```{r}
+dat <- dat %>% mutate(total_garlic = rowSums(across(c(Rosettes:Sillique))),
+                      total_other = rowSums(across(c(Claytonia_virginiana:maianthenum_racemosum))))
+model_dat <- dat %>% filter(Location=="i")
+model_dat$Population <- as.factor(model_dat$Population)
+```
+
+Plotting this data:
+```{r}
+ggplot(model_dat, aes(x=total_garlic, y=total_other)) +
+  geom_point(aes(colour=Population)) +
+  geom_smooth(method="lm") +
+  theme_bw() +
+  xlab("Total garlic mustard present") +
+  ylab("Total other species present")
+```
+
+> **Figure 2: In populations where garlic mustard is present, the total number of other species present increases with increasing garlic mustard. Data was collected from a floristic survey for species abundance in the presence or absence of garlic mustard at the Queen's University Biological Station, and filtered for this model to only contain species with garlic mustard. Points are coloured by population (see legend).**
+
+2. What has a stronger effect on plant communities: the presence/absence of garlic mustard (in/out) or sampling population?
+```{r}
+NMDSdat<-metaMDS(dat_dist, k=2, trymax=100)
+```
+
+Create data for plotting:
+```{r}
+dat_p <- data.frame(NMDS1=NMDSdat$points[,1],
+                 NMDS2=NMDSdat$points[,2],
+                 Quadrate=row.names(dat_a))
+```
+
+Adding species labels:
+```{r}
+dat_p <- merge(dat_p, Location, by="Quadrate", all.x=TRUE, all.y=FALSE)
+str(dat_p)
+dat_p$Population <- as.factor(dat_p$Population)
+```
+
+Plotting the data:
+```{r}
+ggplot(dat_p, aes(x=NMDS1, y=NMDS2, colour=Location, shape=Population)) +
+  geom_point(size=I(3)) +
+  theme_bw() 
+```
+
+> **Figure 3: An NMDS plot with two dimensions clustering quadrates surveyed for species abundance based on the presence of garlic mustard (coloured; red indicates its presence and blue its absence) and the population (specific sampling site at the Queen's University Biological Station). Data was collected from a floristic survey for species abundance in the presence or absence of garlic mustard at the Queen's University Biological Station. Species counts were recorded for each quadrate.**
+
+# Report
+
+## Introduction 
+
+In this report, I measured the abundance of different species in response to the presence or absence of garlic mustard in different populations at the Queen's University Biological Station. Garlic mustard may change plant community composition, and so understanding what changes may occur is important for predicting future responses to its presence. 
+
+## Methods
+
+I used data collected from identification of species presence and abundance, as well as the identification of garlic mustard (separated out into each life stage). I first analyzed the effect of garlic mustard on plant community composition by creating a tree separating quadrates (unique identifiers for combinations of population and garlic mustard presence). I then coloured the tree based on garlic mustard presence/absence to see if it could effectively separate between quadrates with and without it (i.e., that garlic mustard had a large effect on plant community composition). I also plotted a linear model of the relationship between number of garlic mustard (all life stages) and total number of other species for the subset of plots where garlic mustard was present. Second, I analyzed the relative importance of population and garlic mustard presence on predicting plant species composition. For this, I used an NMDS plot of the similarity between NMDS1 and NMDS2, coloured by garlic mustard presence and with points shaped by location.
+
+## Results
+
+### (1) The effect of garlic mustard on plant community
+
+From my tree, I found that garlic mustard presence/absence did not effectively predict the composition of species/species abundance (Figure 1). When colouring by garlic mustard presence/absence, branches on the tree were not most closely clustered by colour but by population (the first two numbers in the labelled unique quadrate identifier). When I plotted the total species abundance relative to the total amount of garlic mustard, I did find a positive correlation (Figure 2). However, this excluded all data points where garlic mustard was not present, which was the main question.
+
+### (2) The relative effects of garlic mustard and sampling population
+
+I found that population more effectively predicted the NMDS similarities than the presence of garlic mustard (Figure 3). When looking at the point shapes (populations), there is a fairly clear clustering of shapes. However, the colours (garlic mustard presence/absence) are not clearly separated into clusters. This indicates that sampling population has a stronger effect on plant community composition than does the presence/absence of garlic mustard.
+
+## Discussion
+
+I found that garlic mustard presence was not a particularly effective predictor of plant species abundance/composition, and that sampling population was a better one. This is surprising given that garlic mustard is known to interfere with the growth of other plants, and its presence should have an effect. However, I did not analyze the contributions of garlic mustard at different life stages, which may cause it to have different effects on plant species abundance. A future study could look at the contributions of these to total species abundance, for instance with a model.
+
